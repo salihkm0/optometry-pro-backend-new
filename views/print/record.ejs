@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title %></title>
+    <style>
+        @media print {
+            @page {
+                size: A4;
+                margin: 0.5in;
+            }
+            
+            body {
+                margin: 0;
+                padding: 0;
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                font-size: 12px;
+                color: #333;
+                background: white;
+            }
+            
+            .no-print {
+                display: none !important;
+            }
+            
+            .page-break {
+                page-break-after: always;
+            }
+            
+            /* Print optimization */
+            * {
+                -webkit-print-color-adjust: exact !important;
+                color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-size: 12px;
+            line-height: 1.4;
+            color: #333;
+            max-width: 8.5in;
+            margin: 0 auto;
+            padding: 20px;
+            background: white;
+        }
+        
+        .header {
+            border-bottom: 2px solid #4f46e5;
+            padding-bottom: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .clinic-info {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        
+        .clinic-name {
+            font-size: 24px;
+            font-weight: bold;
+            color: #4f46e5;
+            margin: 0;
+        }
+        
+        .clinic-contact {
+            font-size: 11px;
+            color: #666;
+            margin-top: 5px;
+        }
+        
+        .patient-info {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 4px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .section-title {
+            font-size: 14px;
+            font-weight: bold;
+            color: #4f46e5;
+            margin-bottom: 10px;
+            padding-bottom: 5px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+        
+        .info-item {
+            margin-bottom: 5px;
+        }
+        
+        .info-label {
+            font-weight: 600;
+            color: #64748b;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .info-value {
+            font-size: 12px;
+            color: #334155;
+        }
+        
+        .prescription-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            border: 1px solid #e2e8f0;
+        }
+        
+        .prescription-table th {
+            background: #4f46e5;
+            color: white;
+            font-weight: 600;
+            text-align: center;
+            padding: 8px;
+            font-size: 11px;
+            text-transform: uppercase;
+            border: 1px solid #e2e8f0;
+        }
+        
+        .prescription-table td {
+            padding: 10px;
+            text-align: center;
+            border: 1px solid #e2e8f0;
+            font-size: 12px;
+        }
+        
+        .eye-label {
+            font-weight: bold;
+            background: #f1f5f9;
+            text-align: left;
+        }
+        
+        .measurement-section {
+            margin: 20px 0;
+        }
+        
+        .additional-info {
+            background: #f0f9ff;
+            border: 1px solid #bae6fd;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        
+        .signature-section {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 2px solid #e2e8f0;
+        }
+        
+        .signature-line {
+            width: 300px;
+            border-bottom: 1px solid #333;
+            margin: 20px 0;
+            padding-top: 30px;
+        }
+        
+        .footer {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 2px solid #e2e8f0;
+            font-size: 10px;
+            color: #64748b;
+            text-align: center;
+        }
+        
+        .print-actions {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: white;
+            padding: 10px;
+            border: 1px solid #e2e8f0;
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            z-index: 1000;
+        }
+        
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            margin-right: 5px;
+        }
+        
+        .btn-print {
+            background: #4f46e5;
+            color: white;
+        }
+        
+        .btn-close {
+            background: #64748b;
+            color: white;
+        }
+        
+        .watermark {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(-45deg);
+            font-size: 60px;
+            color: rgba(79, 70, 229, 0.1);
+            pointer-events: none;
+            z-index: -1;
+            white-space: nowrap;
+        }
+        
+        .alert {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            background: #fef3c7;
+            border: 1px solid #f59e0b;
+            color: #92400e;
+        }
+        
+        .prescription-validity {
+            background: #dcfce7;
+            border: 1px solid #86efac;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 15px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="no-print print-actions">
+        <button class="btn btn-print" onclick="window.print()">Print</button>
+        <button class="btn btn-close" onclick="window.close()">Close</button>
+    </div>
+    
+    <div class="watermark">CONFIDENTIAL</div>
+    
+    <div class="header">
+        <div class="clinic-info">
+            <% if (record.shop.logo) { %>
+                <img src="<%= record.shop.logo %>" alt="Clinic Logo" style="height: 60px; margin-bottom: 10px;">
+            <% } %>
+            <h1 class="clinic-name"><%= record.shop.name %></h1>
+            <div class="clinic-contact">
+                <% if (record.shop.contact.address) { %>
+                    <%= record.shop.contact.address.street %>, 
+                    <%= record.shop.contact.address.city %>, 
+                    <%= record.shop.contact.address.state %> 
+                    <%= record.shop.contact.address.zipCode %>
+                    <br>
+                <% } %>
+                Phone: <%= record.shop.contact.phone %> | 
+                Email: <%= record.shop.contact.email %>
+            </div>
+        </div>
+        
+        <div class="patient-info">
+            <div class="grid">
+                <div class="info-item">
+                    <div class="info-label">Patient Name</div>
+                    <div class="info-value"><strong><%= record.customer.name %></strong></div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Patient ID</div>
+                    <div class="info-value"><%= record.customer.customerId %></div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Age / Gender</div>
+                    <div class="info-value"><%= record.customer.age %> / <%= record.customer.sex %></div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Phone</div>
+                    <div class="info-value"><%= record.customer.phone %></div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Date of Birth</div>
+                    <div class="info-value"><%= record.customer.formattedDateOfBirth || 'N/A' %></div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Examination Date</div>
+                    <div class="info-value"><%= record.formattedDate %></div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Record ID</div>
+                    <div class="info-value"><strong><%= record.recordId %></strong></div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Optometrist</div>
+                    <div class="info-value"><%= record.optometrist?.name || 'N/A' %></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Medical History Alert -->
+    <% if (record.customer.medicalHistory && (
+        record.customer.medicalHistory.diabetes ||
+        record.customer.medicalHistory.hypertension ||
+        record.customer.medicalHistory.glaucoma ||
+        record.customer.medicalHistory.cataract ||
+        (record.customer.medicalHistory.allergies && record.customer.medicalHistory.allergies.length > 0)
+    )) { %>
+        <div class="alert">
+            <strong>Medical History:</strong>
+            <% if (record.customer.medicalHistory.diabetes) { %> Diabetes <% } %>
+            <% if (record.customer.medicalHistory.hypertension) { %> Hypertension <% } %>
+            <% if (record.customer.medicalHistory.glaucoma) { %> Glaucoma <% } %>
+            <% if (record.customer.medicalHistory.cataract) { %> Cataract <% } %>
+            <% if (record.customer.medicalHistory.allergies && record.customer.medicalHistory.allergies.length > 0) { %>
+                | Allergies: <%= record.customer.medicalHistory.allergies.join(', ') %>
+            <% } %>
+        </div>
+    <% } %>
+    
+    <!-- Prescription -->
+    <div class="measurement-section">
+        <h2 class="section-title">EYE PRESCRIPTION</h2>
+        
+        <table class="prescription-table">
+            <thead>
+                <tr>
+                    <th>Lens</th>
+                    <th colspan="4">Right Eye (OD)</th>
+                    <th colspan="4">Left Eye (OS)</th>
+                </tr>
+                <tr>
+                    <th></th>
+                    <th>SPH</th>
+                    <th>CYL</th>
+                    <th>AXIS</th>
+                    <th>V/A</th>
+                    <th>SPH</th>
+                    <th>CYL</th>
+                    <th>AXIS</th>
+                    <th>V/A</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Distance Vision -->
+                <tr>
+                    <td class="eye-label">DV</td>
+                    <td><%= record.right_eye?.dv?.sph || '-' %></td>
+                    <td><%= record.right_eye?.dv?.cyl || '-' %></td>
+                    <td><%= record.right_eye?.dv?.axis || '-' %></td>
+                    <td><%= record.right_eye?.dv?.va || '-' %></td>
+                    <td><%= record.left_eye?.dv?.sph || '-' %></td>
+                    <td><%= record.left_eye?.dv?.cyl || '-' %></td>
+                    <td><%= record.left_eye?.dv?.axis || '-' %></td>
+                    <td><%= record.left_eye?.dv?.va || '-' %></td>
+                </tr>
+                
+                <!-- Near Vision -->
+                <% if (record.right_eye?.nv?.sph || record.left_eye?.nv?.sph) { %>
+                <tr>
+                    <td class="eye-label">NV</td>
+                    <td><%= record.right_eye?.nv?.sph || '-' %></td>
+                    <td><%= record.right_eye?.nv?.cyl || '-' %></td>
+                    <td><%= record.right_eye?.nv?.axis || '-' %></td>
+                    <td><%= record.right_eye?.nv?.va || '-' %></td>
+                    <td><%= record.left_eye?.nv?.sph || '-' %></td>
+                    <td><%= record.left_eye?.nv?.cyl || '-' %></td>
+                    <td><%= record.left_eye?.nv?.axis || '-' %></td>
+                    <td><%= record.left_eye?.nv?.va || '-' %></td>
+                </tr>
+                <% } %>
+                
+                <!-- ADD -->
+                <% if (record.right_eye?.add?.sph || record.left_eye?.add?.sph) { %>
+                <tr>
+                    <td class="eye-label">ADD</td>
+                    <td><%= record.right_eye?.add?.sph || '-' %></td>
+                    <td><%= record.right_eye?.add?.cyl || '-' %></td>
+                    <td><%= record.right_eye?.add?.axis || '-' %></td>
+                    <td><%= record.right_eye?.add?.va || '-' %></td>
+                    <td><%= record.left_eye?.add?.sph || '-' %></td>
+                    <td><%= record.left_eye?.add?.cyl || '-' %></td>
+                    <td><%= record.left_eye?.add?.axis || '-' %></td>
+                    <td><%= record.left_eye?.add?.va || '-' %></td>
+                </tr>
+                <% } %>
+            </tbody>
+        </table>
+    </div>
+    
+    <!-- Additional Measurements -->
+    <% if (record.pd || record.ph || record.prism || record.base) { %>
+    <div class="additional-info">
+        <h3 class="section-title">ADDITIONAL MEASUREMENTS</h3>
+        <div class="grid">
+            <% if (record.pd) { %>
+            <div class="info-item">
+                <div class="info-label">PD</div>
+                <div class="info-value"><%= record.pd %> mm</div>
+            </div>
+            <% } %>
+            
+            <% if (record.ph) { %>
+            <div class="info-item">
+                <div class="info-label">PH</div>
+                <div class="info-value"><%= record.ph %> mm</div>
+            </div>
+            <% } %>
+            
+            <% if (record.prism) { %>
+            <div class="info-item">
+                <div class="info-label">Prism</div>
+                <div class="info-value"><%= record.prism %> Δ</div>
+            </div>
+            <% } %>
+            
+            <% if (record.base) { %>
+            <div class="info-item">
+                <div class="info-label">Base</div>
+                <div class="info-value"><%= record.base %></div>
+            </div>
+            <% } %>
+        </div>
+    </div>
+    <% } %>
+    
+    <!-- Prescription Validity Notice -->
+    <div class="prescription-validity">
+        <strong>PRESCRIPTION VALIDITY:</strong> This prescription is valid for 2 years from the examination date. 
+        Any changes in vision should prompt an earlier re-examination.
+    </div>
+    
+    <!-- Clinical Notes -->
+    <% if (record.notes || record.recommendations || record.diagnosis) { %>
+    <div class="measurement-section">
+        <h2 class="section-title">CLINICAL NOTES</h2>
+        
+        <% if (record.diagnosis) { %>
+        <div class="info-item" style="margin-bottom: 15px;">
+            <div class="info-label">Diagnosis</div>
+            <div class="info-value" style="white-space: pre-wrap;"><%= record.diagnosis %></div>
+        </div>
+        <% } %>
+        
+        <% if (record.recommendations) { %>
+        <div class="info-item" style="margin-bottom: 15px;">
+            <div class="info-label">Recommendations</div>
+            <div class="info-value" style="white-space: pre-wrap;"><%= record.recommendations %></div>
+        </div>
+        <% } %>
+        
+        <% if (record.notes) { %>
+        <div class="info-item">
+            <div class="info-label">Additional Notes</div>
+            <div class="info-value" style="white-space: pre-wrap;"><%= record.notes %></div>
+        </div>
+        <% } %>
+    </div>
+    <% } %>
+    
+    <!-- Next Appointment -->
+    <% if (record.nextAppointment) { %>
+    <div class="additional-info">
+        <div class="info-item">
+            <div class="info-label">Next Appointment</div>
+            <div class="info-value"><strong><%= record.formattedNextAppointment %></strong></div>
+        </div>
+    </div>
+    <% } %>
+    
+    <!-- Signature Section -->
+    <div class="signature-section">
+        <div style="display: flex; justify-content: space-between; margin-top: 40px;">
+            <div>
+                <div class="signature-line"></div>
+                <div style="text-align: center;">
+                    <div class="info-label">Patient's Signature</div>
+                </div>
+            </div>
+            
+            <div>
+                <div class="signature-line"></div>
+                <div style="text-align: center;">
+                    <div class="info-label">Optometrist's Signature</div>
+                    <div class="info-value" style="margin-top: 5px;">
+                        <%= record.optometrist?.name || 'N/A' %>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Footer -->
+    <div class="footer">
+        <p>This is a computer-generated document. No physical signature is required.</p>
+        <p>Printed on: <%= new Date().toLocaleDateString('en-US', { 
+            year: 'numeric', 
+            month: 'long', 
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        }) %></p>
+        <p>Document ID: <%= record.recordId %> | For inquiries: <%= record.shop.contact.phone %></p>
+    </div>
+    
+    <script>
+        // Auto-print option
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('autoprint') === 'true') {
+            window.print();
+        }
+        
+        // Close window after printing
+        window.onafterprint = function() {
+            if (urlParams.get('autoclose') === 'true') {
+                window.close();
+            }
+        };
+    </script>
+</body>
+</html>

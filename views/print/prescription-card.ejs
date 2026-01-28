@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title %></title>
+    <style>
+        @media print {
+            @page {
+                size: A7 landscape;
+                margin: 0.2in;
+            }
+            
+            body {
+                margin: 0;
+                padding: 0;
+                transform: scale(0.95);
+                transform-origin: top left;
+            }
+        }
+        
+        body {
+            font-family: Arial, sans-serif;
+            font-size: 10px;
+            margin: 0;
+            padding: 10px;
+            width: 5in;
+            height: 3in;
+        }
+        
+        .card {
+            border: 2px solid #4f46e5;
+            border-radius: 8px;
+            padding: 10px;
+            position: relative;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 10px;
+            border-bottom: 1px solid #e2e8f0;
+            padding-bottom: 5px;
+        }
+        
+        .clinic-name {
+            font-size: 12px;
+            font-weight: bold;
+            color: #4f46e5;
+            margin: 0;
+        }
+        
+        .patient-info {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+        
+        .info-item {
+            margin-bottom: 3px;
+        }
+        
+        .info-label {
+            font-weight: bold;
+            font-size: 8px;
+            color: #64748b;
+        }
+        
+        .info-value {
+            font-size: 9px;
+        }
+        
+        .prescription-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 8px;
+            margin: 10px 0;
+        }
+        
+        .prescription-table th {
+            background: #4f46e5;
+            color: white;
+            padding: 4px;
+            text-align: center;
+            font-weight: bold;
+        }
+        
+        .prescription-table td {
+            border: 1px solid #e2e8f0;
+            padding: 4px;
+            text-align: center;
+        }
+        
+        .validity {
+            font-size: 8px;
+            text-align: center;
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px dashed #ccc;
+        }
+        
+        .watermark {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(-45deg);
+            font-size: 40px;
+            color: rgba(79, 70, 229, 0.1);
+            pointer-events: none;
+            z-index: -1;
+        }
+    </style>
+</head>
+<body>
+    <div class="watermark">RX</div>
+    
+    <div class="card">
+        <div class="header">
+            <h3 class="clinic-name"><%= record.shop.name %></h3>
+            <div style="font-size: 8px;">
+                <%= record.shop.contact.phone %> | Exam: <%= record.formattedDate %>
+            </div>
+        </div>
+        
+        <div class="patient-info">
+            <div class="info-item">
+                <div class="info-label">Patient</div>
+                <div class="info-value"><strong><%= record.customer.name %></strong></div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">Age/Sex</div>
+                <div class="info-value"><%= record.customer.age %>/<%= record.customer.sex %></div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">Record ID</div>
+                <div class="info-value"><%= record.recordId %></div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">Optometrist</div>
+                <div class="info-value"><%= record.optometrist?.name || 'N/A' %></div>
+            </div>
+        </div>
+        
+        <table class="prescription-table">
+            <thead>
+                <tr>
+                    <th>Eye</th>
+                    <th>SPH</th>
+                    <th>CYL</th>
+                    <th>AXIS</th>
+                    <th>ADD</th>
+                    <th>V/A</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>OD</strong></td>
+                    <td><%= record.right_eye?.dv?.sph || '-' %></td>
+                    <td><%= record.right_eye?.dv?.cyl || '-' %></td>
+                    <td><%= record.right_eye?.dv?.axis || '-' %></td>
+                    <td><%= record.right_eye?.add?.sph || '-' %></td>
+                    <td><%= record.right_eye?.dv?.va || '-' %></td>
+                </tr>
+                <tr>
+                    <td><strong>OS</strong></td>
+                    <td><%= record.left_eye?.dv?.sph || '-' %></td>
+                    <td><%= record.left_eye?.dv?.cyl || '-' %></td>
+                    <td><%= record.left_eye?.dv?.axis || '-' %></td>
+                    <td><%= record.left_eye?.add?.sph || '-' %></td>
+                    <td><%= record.left_eye?.dv?.va || '-' %></td>
+                </tr>
+            </tbody>
+        </table>
+        
+        <% if (record.pd || record.ph) { %>
+        <div style="font-size: 8px; margin-top: 5px;">
+            <% if (record.pd) { %> PD: <%= record.pd %>mm <% } %>
+            <% if (record.ph) { %> | PH: <%= record.ph %>mm <% } %>
+        </div>
+        <% } %>
+        
+        <div class="validity">
+            Valid until: <%= record.expirationDate %> | RX ID: <%= record.recordId %>
+        </div>
+    </div>
+    
+    <script>
+        window.onload = function() {
+            window.print();
+            setTimeout(() => {
+                window.close();
+            }, 500);
+        };
+    </script>
+</body>
+</html>
