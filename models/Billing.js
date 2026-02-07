@@ -63,6 +63,12 @@ const billingSchema = new mongoose.Schema({
     required: [true, 'Customer reference is required'],
     index: true
   },
+  // ADD THIS FIELD
+  optometrist: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    default: null
+  },
   invoiceNumber: {
     type: String,
     required: true,
@@ -149,14 +155,11 @@ const billingSchema = new mongoose.Schema({
     default: 'sale'
   },
   
-  // Doctor/Optometrist Information (for prescriptions)
-  optometrist: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User'
-  },
+  // ADD prescription field if needed
   prescription: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'OptometryRecord'
+    ref: 'Prescription',
+    default: null
   },
   
   // Additional Information
@@ -185,28 +188,6 @@ const billingSchema = new mongoose.Schema({
   updatedBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
-  },
-  
-  // Shipping/Delivery Information
-  delivery: {
-    required: Boolean,
-    address: {
-      type: String,
-      trim: true
-    },
-    expectedDate: Date,
-    deliveredDate: Date,
-    status: {
-      type: String,
-      enum: ['pending', 'processing', 'shipped', 'delivered', 'cancelled'],
-      default: 'pending'
-    },
-    trackingNumber: String,
-    shippingCost: {
-      type: Number,
-      default: 0,
-      min: [0, 'Shipping cost cannot be negative']
-    }
   }
 }, {
   timestamps: true,
@@ -221,16 +202,8 @@ billingSchema.index({ shop: 1, invoiceDate: -1 });
 billingSchema.index({ shop: 1, 'payment.status': 1 });
 billingSchema.index({ shop: 1, status: 1 });
 billingSchema.index({ shop: 1, 'payment.method': 1 });
-billingSchema.index({ invoiceNumber: 'text', 'products.name': 'text' });
-
-// Virtual for invoice year and month
-billingSchema.virtual('invoiceYear').get(function() {
-  return this.invoiceDate.getFullYear();
-});
-
-billingSchema.virtual('invoiceMonth').get(function() {
-  return this.invoiceDate.getMonth() + 1;
-});
+// ADD index for optometrist
+billingSchema.index({ shop: 1, optometrist: 1 });
 
 // Pre-save middleware to generate invoice number and calculate totals
 billingSchema.pre('save', async function(next) {
@@ -255,56 +228,55 @@ billingSchema.pre('save', async function(next) {
       this.dueDate.setDate(this.dueDate.getDate() + 30);
     }
     
-    // Calculate product totals
-    this.products.forEach(product => {
-      const productTotal = product.mrp * product.quantity;
-      const productDiscount = product.discount || 0;
-      const productNet = productTotal - productDiscount;
+    // Calculate product totals if not already calculated
+    if (this.products && this.products.length > 0) {
+      this.products.forEach(product => {
+        const productTotal = product.mrp * product.quantity;
+        const productDiscount = product.discount || 0;
+        const productNet = productTotal - productDiscount;
+        
+        // Calculate tax if not provided
+        if (!product.taxAmount && product.taxRate > 0) {
+          product.taxAmount = (productNet * product.taxRate) / 100;
+        }
+        
+        product.total = productNet + (product.taxAmount || 0);
+      });
       
-      // Calculate tax if not provided
-      if (!product.taxAmount && product.taxRate > 0) {
-        product.taxAmount = (productNet * product.taxRate) / 100;
+      // Calculate totals if not provided
+      if (!this.subtotal) {
+        this.subtotal = this.products.reduce((sum, product) => sum + (product.mrp * product.quantity), 0);
       }
       
-      product.total = productNet + (product.taxAmount || 0);
-    });
-    
-    // Calculate subtotal
-    this.subtotal = this.products.reduce((sum, product) => sum + (product.mrp * product.quantity), 0);
-    
-    // Calculate total product discount
-    this.totalDiscount = this.products.reduce((sum, product) => sum + product.discount, 0);
-    
-    // Calculate additional discount
-    if (this.discountType === 'percentage') {
-      const discountableAmount = this.subtotal - this.totalDiscount;
-      this.additionalDiscount = (discountableAmount * this.discountPercentage) / 100;
-    }
-    
-    // Calculate total tax
-    this.totalTax = this.products.reduce((sum, product) => sum + (product.taxAmount || 0), 0);
-    
-    // Calculate final amount
-    const netAmount = this.subtotal - this.totalDiscount - this.additionalDiscount;
-    this.finalAmount = netAmount + this.totalTax;
-    
-    // Add shipping cost if delivery is required
-    if (this.delivery?.required && this.delivery?.shippingCost) {
-      this.finalAmount += this.delivery.shippingCost;
+      if (!this.totalDiscount) {
+        const productDiscount = this.products.reduce((sum, product) => sum + (product.discount || 0), 0);
+        this.totalDiscount = productDiscount + (this.additionalDiscount || 0);
+      }
+      
+      if (!this.totalTax) {
+        this.totalTax = this.products.reduce((sum, product) => sum + (product.taxAmount || 0), 0);
+      }
+      
+      if (!this.finalAmount) {
+        this.finalAmount = this.subtotal - this.totalDiscount + this.totalTax;
+      }
     }
     
     // Set payment amount to final amount if not specified
-    if (!this.payment.amount || this.payment.amount === 0) {
-      this.payment.amount = this.finalAmount;
+    if (!this.payment || !this.payment.amount || this.payment.amount === 0) {
+      if (!this.payment) this.payment = {};
+      this.payment.amount = this.finalAmount || 0;
     }
     
     // Update payment status based on amount
-    if (this.payment.amount >= this.finalAmount) {
-      this.payment.status = 'paid';
-    } else if (this.payment.amount > 0 && this.payment.amount < this.finalAmount) {
-      this.payment.status = 'partial';
-    } else {
-      this.payment.status = 'pending';
+    if (this.payment) {
+      if (this.payment.amount >= this.finalAmount) {
+        this.payment.status = 'paid';
+      } else if (this.payment.amount > 0 && this.payment.amount < this.finalAmount) {
+        this.payment.status = 'partial';
+      } else {
+        this.payment.status = 'pending';
+      }
     }
     
     next();
@@ -312,70 +284,5 @@ billingSchema.pre('save', async function(next) {
     next(error);
   }
 });
-
-// Post-save middleware to update customer's last visit and total spent
-billingSchema.post('save', async function(doc) {
-  try {
-    if (doc.status === 'generated' || doc.status === 'paid') {
-      // Update customer's last visit and total spent
-      await mongoose.model('Customer').findByIdAndUpdate(doc.customer, {
-        $set: { lastVisit: doc.invoiceDate },
-        $inc: { 
-          totalVisits: 1,
-          totalSpent: doc.finalAmount
-        }
-      });
-      
-      // Create payment record if payment was made
-      if (doc.payment.status === 'paid' || doc.payment.status === 'partial') {
-        await mongoose.model('Payment').create({
-          shop: doc.shop,
-          customer: doc.customer,
-          invoice: doc._id,
-          invoiceNumber: doc.invoiceNumber,
-          amount: doc.payment.amount,
-          method: doc.payment.method,
-          transactionId: doc.payment.transactionId,
-          referenceNumber: doc.payment.referenceNumber,
-          date: doc.payment.paymentDate || doc.invoiceDate,
-          status: 'completed',
-          notes: doc.payment.notes,
-          createdBy: doc.createdBy
-        });
-      }
-    }
-  } catch (error) {
-    console.error('Error updating customer/payment records:', error);
-  }
-});
-
-// Static methods
-billingSchema.statics.generateInvoiceNumber = async function(shopId) {
-  const shop = await mongoose.model('Shop').findById(shopId);
-  const count = await this.countDocuments({
-    shop: shopId,
-    invoiceDate: {
-      $gte: new Date(new Date().getFullYear(), 0, 1),
-      $lt: new Date(new Date().getFullYear() + 1, 0, 1)
-    }
-  });
-  const year = new Date().getFullYear().toString().substr(-2);
-  return `INV-${shop?.name?.substring(0, 3).toUpperCase() || 'SHP'}${year}${(count + 1).toString().padStart(5, '0')}`;
-};
-
-// Method to get invoice summary
-billingSchema.methods.getInvoiceSummary = function() {
-  return {
-    invoiceNumber: this.invoiceNumber,
-    customer: this.customer?.name || 'N/A',
-    date: this.invoiceDate,
-    subtotal: this.subtotal,
-    discount: this.totalDiscount + this.additionalDiscount,
-    tax: this.totalTax,
-    finalAmount: this.finalAmount,
-    paymentStatus: this.payment.status,
-    status: this.status
-  };
-};
 
 module.exports = mongoose.model('Billing', billingSchema);

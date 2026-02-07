@@ -1,13 +1,14 @@
 const Billing = require('../models/Billing');
 const Customer = require('../models/Customer');
 const Payment = require('../models/Payment');
+const mongoose = require('mongoose');
 
 // @desc    Create new bill
 // @route   POST /api/billing
 // @access  Private
 exports.createBill = async (req, res) => {
   try {
-    const { customer: customerId, ...billingData } = req.body;
+    const { customer: customerId, optometrist, ...billingData } = req.body;
     
     // Verify customer exists and belongs to shop
     const customer = await Customer.findOne({
@@ -22,17 +23,59 @@ exports.createBill = async (req, res) => {
       });
     }
     
-    // Create bill
-    const bill = await Billing.create({
+    // Calculate totals
+    const subtotal = billingData.products.reduce((sum, product) => sum + (product.mrp * product.quantity), 0);
+    const productDiscount = billingData.products.reduce((sum, product) => sum + (product.discount || 0), 0);
+    const additionalDiscount = billingData.additionalDiscount || 0;
+    const totalDiscount = productDiscount + additionalDiscount;
+    const totalTax = billingData.products.reduce((sum, product) => sum + (product.taxAmount || 0), 0);
+    const finalAmount = billingData.products.reduce((sum, product) => sum + (product.total || 0), 0);
+    
+    // Generate invoice number manually
+    const shop = await mongoose.model('Shop').findById(req.user.shop);
+    const count = await Billing.countDocuments({
+      shop: req.user.shop,
+      invoiceDate: {
+        $gte: new Date(new Date().getFullYear(), 0, 1),
+        $lt: new Date(new Date().getFullYear() + 1, 0, 1)
+      }
+    });
+    const year = new Date().getFullYear().toString().substr(-2);
+    const invoiceNumber = `INV-${shop?.name?.substring(0, 3).toUpperCase() || 'SHP'}${year}${(count + 1).toString().padStart(5, '0')}`;
+    
+    // Set due date if not provided (30 days from invoice date)
+    let dueDate = billingData.dueDate || new Date(billingData.invoiceDate || Date.now());
+    if (!billingData.dueDate) {
+      dueDate = new Date(billingData.invoiceDate || Date.now());
+      dueDate.setDate(dueDate.getDate() + 30);
+    }
+    
+    // Create bill with all required fields
+    const billData = {
       ...billingData,
       shop: req.user.shop,
       customer: customerId,
-      createdBy: req.user._id
-    });
+      optometrist: optometrist || null,
+      createdBy: req.user._id,
+      invoiceNumber,
+      dueDate,
+      subtotal,
+      totalDiscount,
+      totalTax,
+      finalAmount,
+      payment: {
+        ...billingData.payment,
+        amount: billingData.payment?.amount || finalAmount,
+        status: (billingData.payment?.amount || finalAmount) >= finalAmount ? 'paid' : 
+                (billingData.payment?.amount || 0) > 0 ? 'partial' : 'pending'
+      }
+    };
+    
+    const bill = await Billing.create(billData);
     
     // Populate customer details
     await bill.populate('customer', 'name phone email customerId');
-    if (billingData.optometrist) {
+    if (bill.optometrist) {
       await bill.populate('optometrist', 'name email');
     }
     
@@ -72,8 +115,7 @@ exports.getBills = async (req, res) => {
     // Search by invoice number or customer name
     if (search) {
       query.$or = [
-        { invoiceNumber: { $regex: search, $options: 'i' } },
-        { 'customer.name': { $regex: search, $options: 'i' } }
+        { invoiceNumber: { $regex: search, $options: 'i' } }
       ];
     }
     
@@ -243,6 +285,14 @@ exports.updateBill = async (req, res) => {
         bill[key] = req.body[key];
       }
     });
+    
+    // Recalculate totals if products are updated
+    if (req.body.products) {
+      bill.subtotal = req.body.products.reduce((sum, product) => sum + (product.mrp * product.quantity), 0);
+      bill.totalDiscount = req.body.products.reduce((sum, product) => sum + (product.discount || 0), 0) + (bill.additionalDiscount || 0);
+      bill.totalTax = req.body.products.reduce((sum, product) => sum + (product.taxAmount || 0), 0);
+      bill.finalAmount = req.body.products.reduce((sum, product) => sum + (product.total || 0), 0);
+    }
     
     bill.updatedBy = req.user._id;
     
@@ -501,30 +551,60 @@ exports.getBillingStats = async (req, res) => {
   try {
     const { period = 'month', startDate, endDate } = req.query;
     
-    let matchStage = { shop: req.user.shop, status: { $in: ['generated', 'paid'] } };
+    let matchStage = { 
+      shop: req.user.shop, 
+      status: { $in: ['generated', 'paid'] } 
+    };
+    
+    // Validate shop ID
+    if (!mongoose.Types.ObjectId.isValid(req.user.shop)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid shop ID format'
+      });
+    }
     
     // Set date range based on period
     const now = new Date();
+    let startOfRange, endOfRange;
+    
     if (period === 'today') {
-      const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      matchStage.invoiceDate = { $gte: startOfDay };
+      startOfRange = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      endOfRange = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
     } else if (period === 'week') {
-      const startOfWeek = new Date(now.setDate(now.getDate() - now.getDay()));
-      matchStage.invoiceDate = { $gte: startOfWeek };
+      startOfRange = new Date(now.setDate(now.getDate() - now.getDay()));
+      endOfRange = new Date(now);
+      endOfRange.setDate(endOfRange.getDate() + 7);
     } else if (period === 'month') {
-      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-      matchStage.invoiceDate = { $gte: startOfMonth };
+      startOfRange = new Date(now.getFullYear(), now.getMonth(), 1);
+      endOfRange = new Date(now.getFullYear(), now.getMonth() + 1, 0);
     } else if (period === 'year') {
-      const startOfYear = new Date(now.getFullYear(), 0, 1);
-      matchStage.invoiceDate = { $gte: startOfYear };
+      startOfRange = new Date(now.getFullYear(), 0, 1);
+      endOfRange = new Date(now.getFullYear(), 11, 31);
     }
     
     // Custom date range
     if (startDate || endDate) {
       matchStage.invoiceDate = {};
-      if (startDate) matchStage.invoiceDate.$gte = new Date(startDate);
-      if (endDate) matchStage.invoiceDate.$lte = new Date(endDate);
+      if (startDate) {
+        startOfRange = new Date(startDate);
+        matchStage.invoiceDate.$gte = startOfRange;
+      }
+      if (endDate) {
+        endOfRange = new Date(endDate);
+        matchStage.invoiceDate.$lte = endOfRange;
+      }
+    } else if (startOfRange && endOfRange) {
+      // Use period-based range
+      matchStage.invoiceDate = {
+        $gte: startOfRange,
+        $lte: endOfRange
+      };
     }
+    
+    // Convert shop ID to ObjectId
+    const shopId = new mongoose.Types.ObjectId(req.user.shop);
+    matchStage.shop = shopId;
     
     const stats = await Billing.aggregate([
       {
@@ -563,7 +643,7 @@ exports.getBillingStats = async (req, res) => {
           totalRevenue: 1,
           totalDiscount: 1,
           totalTax: 1,
-          averageBillValue: { $divide: ['$totalRevenue', '$totalBills'] },
+          averageBillValue: { $divide: ['$totalRevenue', { $cond: [{ $eq: ['$totalBills', 0] }, 1, '$totalBills'] }] },
           paymentMethodStats: {
             $arrayToObject: {
               $map: {
@@ -692,6 +772,7 @@ exports.exportBills = async (req, res) => {
         'Date': bill.invoiceDate.toISOString().split('T')[0],
         'Customer': bill.customer?.name || 'N/A',
         'Customer Phone': bill.customer?.phone || 'N/A',
+        'Optometrist': bill.optometrist?.name || 'N/A',
         'Subtotal': bill.subtotal,
         'Discount': bill.totalDiscount + bill.additionalDiscount,
         'Tax': bill.totalTax,

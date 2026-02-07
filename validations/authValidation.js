@@ -1,4 +1,4 @@
-const { body } = require('express-validator');
+const Joi = require('joi');
 
 const validRoles = ['super_admin', 'admin', 'shop_owner', 'optometrist', 'assistant', 'receptionist'];
 const validPermissions = [
@@ -12,173 +12,309 @@ const validPermissions = [
   'settings'
 ];
 
-const registerValidation = [
-  body('name')
-    .trim()
-    .notEmpty()
-    .withMessage('Name is required')
-    .isLength({ max: 100 })
-    .withMessage('Name cannot exceed 100 characters'),
-  
-  body('email')
-    .trim()
-    .notEmpty()
-    .withMessage('Email is required')
-    .isEmail()
-    .withMessage('Please enter a valid email')
-    .normalizeEmail(),
-  
-  body('phone')
-    .optional()
-    .trim()
-    .matches(/^[\+]?[1-9][\d]{0,15}$/)
-    .withMessage('Please enter a valid phone number'),
-  
-  body('password')
-    .notEmpty()
-    .withMessage('Password is required')
-    .isLength({ min: 6 })
-    .withMessage('Password must be at least 6 characters'),
-  
-  body('role')
-    .optional()
-    .isIn(validRoles)
-    .withMessage('Invalid role'),
-  
-  body('shop')
-    .optional()
-    .isMongoId()
-    .withMessage('Invalid shop ID'),
-  
-  body('permissions')
-    .optional()
-    .custom((value) => {
-      // If permissions is provided, it must be an array
-      if (value && !Array.isArray(value)) {
-        throw new Error('Permissions must be an array');
-      }
-      return true;
-    })
-    .customSanitizer((value) => {
-      // Clean permissions: ensure all are strings and valid
-      if (Array.isArray(value)) {
-        return value
-          .filter(p => p !== null && p !== undefined && p !== '')
-          .map(p => typeof p === 'string' ? p.trim() : String(p).trim())
-          .filter(p => validPermissions.includes(p));
-      }
-      return value;
+// Common validation patterns
+const phonePattern = /^[\+]?[1-9][\d\s\-\(\)\.]{7,15}$/;
+const objectIdPattern = /^[0-9a-fA-F]{24}$/;
+
+const registerValidation = Joi.object({
+  name: Joi.string()
+    .required()
+    .max(100)
+    .messages({
+      'string.empty': 'Name is required',
+      'string.max': 'Name cannot exceed 100 characters'
     }),
   
-  body('department')
-    .optional()
-    .trim()
-    .isLength({ max: 100 })
-    .withMessage('Department cannot exceed 100 characters')
-];
-
-const loginValidation = [
-  body('email')
-    .if(body('phone').isEmpty())
-    .trim()
-    .notEmpty()
-    .withMessage('Email or phone is required')
-    .isEmail()
-    .withMessage('Please enter a valid email')
-    .normalizeEmail(),
+  email: Joi.string()
+    .email()
+    .required()
+    .messages({
+      'string.empty': 'Email is required',
+      'string.email': 'Please enter a valid email'
+    }),
   
-  body('phone')
-    .if(body('email').isEmpty())
-    .trim()
-    .notEmpty()
-    .withMessage('Email or phone is required')
-    .matches(/^[\+]?[1-9][\d]{0,15}$/)
-    .withMessage('Please enter a valid phone number'),
-  
-  body('password')
-    .notEmpty()
-    .withMessage('Password is required')
-];
-
-const updateProfileValidation = [
-  body('name')
+  phone: Joi.string()
+    .pattern(phonePattern)
+    .allow('', null)
     .optional()
-    .trim()
-    .isLength({ max: 100 })
-    .withMessage('Name cannot exceed 100 characters'),
+    .messages({
+      'string.pattern.base': 'Please enter a valid phone number'
+    }),
   
-  body('phone')
-    .optional()
-    .trim()
-    .matches(/^[\+]?[1-9][\d]{0,15}$/)
-    .withMessage('Please enter a valid phone number'),
+  password: Joi.string()
+    .required()
+    .min(6)
+    .messages({
+      'string.empty': 'Password is required',
+      'string.min': 'Password must be at least 6 characters'
+    }),
   
-  body('department')
-    .optional()
-    .trim()
-    .isLength({ max: 100 })
-    .withMessage('Department cannot exceed 100 characters'),
+  role: Joi.string()
+    .valid(...validRoles)
+    .default('optometrist')
+    .optional(),
   
-  body('permissions')
+  shop: Joi.string()
+    .pattern(objectIdPattern)
     .optional()
-    .custom((value) => {
-      if (value && !Array.isArray(value)) {
-        throw new Error('Permissions must be an array');
-      }
-      return true;
+    .messages({
+      'string.pattern.base': 'Invalid shop ID'
+    }),
+  
+  permissions: Joi.array()
+    .items(Joi.string().valid(...validPermissions))
+    .optional(),
+  
+  department: Joi.string()
+    .max(100)
+    .allow('')
+    .optional()
+    .messages({
+      'string.max': 'Department cannot exceed 100 characters'
     })
-    .customSanitizer((value) => {
-      if (Array.isArray(value)) {
-        return value
-          .filter(p => p !== null && p !== undefined && p !== '')
-          .map(p => typeof p === 'string' ? p.trim() : String(p).trim())
-          .filter(p => validPermissions.includes(p));
-      }
-      return value;
+});
+
+// Fix: Create a simple login validation without complex when() conditions
+const loginValidation = Joi.object({
+  email: Joi.string()
+    .email()
+    .optional()
+    .messages({
+      'string.email': 'Please enter a valid email'
+    }),
+  
+  phone: Joi.string()
+    .pattern(phonePattern)
+    .optional()
+    .messages({
+      'string.pattern.base': 'Please enter a valid phone number'
+    }),
+  
+  password: Joi.string()
+    .required()
+    .messages({
+      'string.empty': 'Password is required'
     })
-];
-
-const changePasswordValidation = [
-  body('currentPassword')
-    .notEmpty()
-    .withMessage('Current password is required'),
+})
+.custom((value, helpers) => {
+  // Custom validation to check if at least email or phone is provided
+  const { email, phone } = value;
   
-  body('newPassword')
-    .notEmpty()
-    .withMessage('New password is required')
-    .isLength({ min: 6 })
-    .withMessage('New password must be at least 6 characters'),
+  if (!email && !phone) {
+    return helpers.error('any.required');
+  }
   
-  body('confirmPassword')
-    .notEmpty()
-    .withMessage('Confirm password is required')
-    .custom((value, { req }) => value === req.body.newPassword)
-    .withMessage('Passwords do not match')
-];
+  return value;
+})
+.messages({
+  'any.required': 'Email or phone is required'
+});
 
-const forgotPasswordValidation = [
-  body('email')
-    .trim()
-    .notEmpty()
-    .withMessage('Email is required')
-    .isEmail()
-    .withMessage('Please enter a valid email')
-    .normalizeEmail()
-];
-
-const resetPasswordValidation = [
-  body('password')
-    .notEmpty()
-    .withMessage('Password is required')
-    .isLength({ min: 6 })
-    .withMessage('Password must be at least 6 characters'),
+const updateProfileValidation = Joi.object({
+  name: Joi.string()
+    .max(100)
+    .optional()
+    .messages({
+      'string.max': 'Name cannot exceed 100 characters'
+    }),
   
-  body('confirmPassword')
-    .notEmpty()
-    .withMessage('Confirm password is required')
-    .custom((value, { req }) => value === req.body.password)
-    .withMessage('Passwords do not match')
-];
+  phone: Joi.string()
+    .pattern(phonePattern)
+    .allow('', null)
+    .optional()
+    .messages({
+      'string.pattern.base': 'Please enter a valid phone number'
+    }),
+  
+  department: Joi.string()
+    .max(100)
+    .allow('')
+    .optional()
+    .messages({
+      'string.max': 'Department cannot exceed 100 characters'
+    }),
+  
+  profileImage: Joi.string()
+    .uri()
+    .allow('', null)
+    .optional()
+    .messages({
+      'string.uri': 'Profile image must be a valid URL'
+    }),
+  
+  permissions: Joi.array()
+    .items(Joi.string().valid(...validPermissions))
+    .optional()
+});
+
+const changePasswordValidation = Joi.object({
+  currentPassword: Joi.string()
+    .required()
+    .messages({
+      'string.empty': 'Current password is required'
+    }),
+  
+  newPassword: Joi.string()
+    .required()
+    .min(6)
+    .messages({
+      'string.empty': 'New password is required',
+      'string.min': 'New password must be at least 6 characters'
+    }),
+  
+  confirmPassword: Joi.string()
+    .required()
+    .valid(Joi.ref('newPassword'))
+    .messages({
+      'string.empty': 'Confirm password is required',
+      'any.only': 'Passwords do not match'
+    })
+});
+
+const forgotPasswordValidation = Joi.object({
+  email: Joi.string()
+    .email()
+    .required()
+    .messages({
+      'string.empty': 'Email is required',
+      'string.email': 'Please enter a valid email'
+    })
+});
+
+const resetPasswordValidation = Joi.object({
+  token: Joi.string()
+    .required()
+    .messages({
+      'string.empty': 'Reset token is required'
+    }),
+  
+  password: Joi.string()
+    .required()
+    .min(6)
+    .messages({
+      'string.empty': 'Password is required',
+      'string.min': 'Password must be at least 6 characters'
+    }),
+  
+  confirmPassword: Joi.string()
+    .required()
+    .valid(Joi.ref('password'))
+    .messages({
+      'string.empty': 'Confirm password is required',
+      'any.only': 'Passwords do not match'
+    })
+});
+
+const createUserValidation = Joi.object({
+  name: Joi.string()
+    .required()
+    .max(100)
+    .messages({
+      'string.empty': 'Name is required',
+      'string.max': 'Name cannot exceed 100 characters'
+    }),
+  
+  email: Joi.string()
+    .email()
+    .required()
+    .messages({
+      'string.empty': 'Email is required',
+      'string.email': 'Please enter a valid email'
+    }),
+  
+  phone: Joi.string()
+    .pattern(phonePattern)
+    .allow('', null)
+    .optional()
+    .messages({
+      'string.pattern.base': 'Please enter a valid phone number'
+    }),
+  
+  password: Joi.string()
+    .optional()
+    .min(6)
+    .messages({
+      'string.min': 'Password must be at least 6 characters'
+    }),
+  
+  role: Joi.string()
+    .valid(...validRoles)
+    .required()
+    .messages({
+      'string.empty': 'Role is required',
+      'any.only': 'Invalid role'
+    }),
+  
+  shop: Joi.string()
+    .pattern(objectIdPattern)
+    .optional()
+    .messages({
+      'string.pattern.base': 'Invalid shop ID'
+    }),
+  
+  permissions: Joi.array()
+    .items(Joi.string().valid(...validPermissions))
+    .default([])
+    .optional(),
+  
+  department: Joi.string()
+    .max(100)
+    .allow('')
+    .optional()
+    .messages({
+      'string.max': 'Department cannot exceed 100 characters'
+    }),
+  
+  isActive: Joi.boolean()
+    .default(true)
+    .optional()
+});
+
+const updateUserValidation = Joi.object({
+  name: Joi.string()
+    .max(100)
+    .optional()
+    .messages({
+      'string.max': 'Name cannot exceed 100 characters'
+    }),
+  
+  phone: Joi.string()
+    .pattern(phonePattern)
+    .allow('', null)
+    .optional()
+    .messages({
+      'string.pattern.base': 'Please enter a valid phone number'
+    }),
+  
+  role: Joi.string()
+    .valid(...validRoles)
+    .optional()
+    .messages({
+      'any.only': 'Invalid role'
+    }),
+  
+  shop: Joi.string()
+    .pattern(objectIdPattern)
+    .optional()
+    .messages({
+      'string.pattern.base': 'Invalid shop ID'
+    }),
+  
+  permissions: Joi.array()
+    .items(Joi.string().valid(...validPermissions))
+    .optional(),
+  
+  department: Joi.string()
+    .max(100)
+    .allow('')
+    .optional()
+    .messages({
+      'string.max': 'Department cannot exceed 100 characters'
+    }),
+  
+  isActive: Joi.boolean()
+    .optional()
+});
 
 module.exports = {
   registerValidation,
@@ -187,6 +323,8 @@ module.exports = {
   changePasswordValidation,
   forgotPasswordValidation,
   resetPasswordValidation,
+  createUserValidation,
+  updateUserValidation,
   validPermissions,
   validRoles
 };

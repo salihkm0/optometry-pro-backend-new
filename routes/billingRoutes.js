@@ -22,6 +22,15 @@ const {
   exportBills
 } = require('../controllers/billingController');
 
+const {
+  printInvoice,
+  generateAndSavePDF,
+  downloadPDF,
+  previewInvoice,
+  bulkGeneratePDF,
+  getPrintOptions
+} = require('../controllers/pdfController');
+
 // All routes are protected
 router.use(protect);
 
@@ -92,6 +101,41 @@ router.get(
 router.get(
   '/export',
   exportBills
+);
+
+// PDF Generation Routes
+router.get(
+  '/:id/print',
+  validateObjectId('id'),
+  printInvoice
+);
+
+router.post(
+  '/:id/generate-pdf',
+  validateObjectId('id'),
+  generateAndSavePDF
+);
+
+router.get(
+  '/:id/download-pdf',
+  validateObjectId('id'),
+  downloadPDF
+);
+
+router.get(
+  '/:id/preview',
+  validateObjectId('id'),
+  previewInvoice
+);
+
+router.post(
+  '/bulk-generate-pdf',
+  bulkGeneratePDF
+);
+
+router.get(
+  '/print-options',
+  getPrintOptions
 );
 
 module.exports = router;

@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Invoice <%= bill.invoiceNumber %></title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Helvetica', 'Arial', sans-serif;
+        }
+
+        body {
+            color: #333;
+            line-height: 1.4;
+            background: #fff;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #fff;
+        }
+
+        /* Header Styles */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #4F46E5;
+        }
+
+        .company-info h1 {
+            color: #1F2937;
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+
+        .company-details {
+            color: #6B7280;
+            font-size: 12px;
+        }
+
+        .invoice-info {
+            text-align: right;
+        }
+
+        .invoice-title {
+            font-size: 32px;
+            color: #4F46E5;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .invoice-number {
+            font-size: 14px;
+            color: #6B7280;
+        }
+
+        /* Section Styles */
+        .section {
+            margin-bottom: 25px;
+        }
+
+        .section-title {
+            font-size: 16px;
+            font-weight: bold;
+            color: #1F2937;
+            margin-bottom: 10px;
+            padding-bottom: 5px;
+            border-bottom: 1px solid #E5E7EB;
+        }
+
+        .two-columns {
+            display: flex;
+            justify-content: space-between;
+            gap: 40px;
+        }
+
+        .column {
+            flex: 1;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 8px 15px;
+            font-size: 13px;
+        }
+
+        .info-label {
+            font-weight: 600;
+            color: #6B7280;
+        }
+
+        .info-value {
+            color: #1F2937;
+        }
+
+        /* Table Styles */
+        .table-container {
+            margin-top: 20px;
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        thead {
+            background: #4F46E5;
+            color: white;
+        }
+
+        th {
+            padding: 12px 10px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        tbody tr {
+            border-bottom: 1px solid #E5E7EB;
+        }
+
+        tbody tr:nth-child(even) {
+            background: #F9FAFB;
+        }
+
+        td {
+            padding: 12px 10px;
+        }
+
+        .text-right {
+            text-align: right;
+        }
+
+        .text-center {
+            text-align: center;
+        }
+
+        .text-bold {
+            font-weight: 600;
+        }
+
+        /* Totals Section */
+        .totals-section {
+            margin-top: 30px;
+            display: flex;
+            justify-content: flex-end;
+        }
+
+        .totals-table {
+            width: 300px;
+            border: 1px solid #E5E7EB;
+        }
+
+        .totals-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 15px;
+            border-bottom: 1px solid #E5E7EB;
+        }
+
+        .totals-row:last-child {
+            border-bottom: none;
+        }
+
+        .total-label {
+            color: #6B7280;
+        }
+
+        .total-value {
+            font-weight: 600;
+            color: #1F2937;
+        }
+
+        .grand-total {
+            background: #4F46E5;
+            color: white;
+            font-weight: bold;
+            font-size: 16px;
+        }
+
+        .grand-total .total-label {
+            color: white;
+        }
+
+        /* Footer Styles */
+        .footer {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #E5E7EB;
+            font-size: 11px;
+            color: #6B7280;
+            text-align: center;
+        }
+
+        .payment-info {
+            background: #F3F4F6;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 10px;
+        }
+
+        .payment-info h4 {
+            margin-bottom: 8px;
+            color: #1F2937;
+        }
+
+        /* Status Badge */
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .status-paid {
+            background: #D1FAE5;
+            color: #065F46;
+        }
+
+        .status-pending {
+            background: #FEF3C7;
+            color: #92400E;
+        }
+
+        .status-partial {
+            background: #DBEAFE;
+            color: #1E40AF;
+        }
+
+        .status-draft {
+            background: #F3F4F6;
+            color: #6B7280;
+        }
+
+        /* QR Code Area */
+        .qr-section {
+            text-align: center;
+            margin-top: 20px;
+            padding: 15px;
+            background: #F9FAFB;
+            border-radius: 4px;
+        }
+
+        .qr-label {
+            font-size: 11px;
+            color: #6B7280;
+            margin-top: 8px;
+        }
+
+        /* Print Styles */
+        @media print {
+            body {
+                padding: 0;
+                margin: 0;
+            }
+            
+            .container {
+                max-width: 100%;
+                padding: 10px;
+            }
+            
+            .no-print {
+                display: none !important;
+            }
+            
+            .footer {
+                position: fixed;
+                bottom: 0;
+                width: 100%;
+            }
+        }
+
+        /* Watermark for Draft */
+        .watermark {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(-45deg);
+            font-size: 80px;
+            color: rgba(0, 0, 0, 0.1);
+            z-index: -1;
+            font-weight: bold;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <% if (bill.status === 'draft') { %>
+            <div class="watermark">DRAFT</div>
+        <% } %>
+        
+        <!-- Header Section -->
+        <div class="header">
+            <div class="company-info">
+                <h1><%= company.name %></h1>
+                <div class="company-details">
+                    <p><%= company.address %></p>
+                    <p>Phone: <%= company.phone %> | Email: <%= company.email %></p>
+                    <p>GSTIN: <%= company.gstin %> | PAN: <%= company.pan %></p>
+                    <% if (company.website) { %><p>Website: <%= company.website %></p><% } %>
+                </div>
+            </div>
+            
+            <div class="invoice-info">
+                <div class="invoice-title">INVOICE</div>
+                <div class="invoice-number">#<%= bill.invoiceNumber %></div>
+                <div class="status-badge status-<%= bill.payment.status %>">
+                    <%= bill.payment.status.toUpperCase() %>
+                </div>
+            </div>
+        </div>
+
+        <!-- Customer & Invoice Details -->
+        <div class="section two-columns">
+            <div class="column">
+                <h3 class="section-title">Bill To:</h3>
+                <div class="info-grid">
+                    <div class="info-label">Name:</div>
+                    <div class="info-value"><%= customer.name %></div>
+                    
+                    <div class="info-label">Phone:</div>
+                    <div class="info-value"><%= customer.phone %></div>
+                    
+                    <% if (customer.email) { %>
+                        <div class="info-label">Email:</div>
+                        <div class="info-value"><%= customer.email %></div>
+                    <% } %>
+                    
+                    <% if (customer.address) { %>
+                        <div class="info-label">Address:</div>
+                        <div class="info-value"><%= customer.address %></div>
+                    <% } %>
+                    
+                    <% if (customer.customerId) { %>
+                        <div class="info-label">Customer ID:</div>
+                        <div class="info-value"><%= customer.customerId %></div>
+                    <% } %>
+                </div>
+            </div>
+            
+            <div class="column">
+                <h3 class="section-title">Invoice Details:</h3>
+                <div class="info-grid">
+                    <div class="info-label">Invoice Date:</div>
+                    <div class="info-value"><%= formatDate(bill.invoiceDate) %></div>
+                    
+                    <div class="info-label">Due Date:</div>
+                    <div class="info-value"><%= formatDate(bill.dueDate) %></div>
+                    
+                    <% if (bill.optometrist) { %>
+                        <div class="info-label">Optometrist:</div>
+                        <div class="info-value"><%= bill.optometrist.name %></div>
+                    <% } %>
+                    
+                    <% if (bill.prescription) { %>
+                        <div class="info-label">Prescription No:</div>
+                        <div class="info-value"><%= bill.prescription %></div>
+                    <% } %>
+                    
+                    <div class="info-label">Payment Method:</div>
+                    <div class="info-value">
+                        <%= bill.payment.method.toUpperCase() %>
+                        <% if (bill.payment.transactionId) { %>
+                            <br><small>(Ref: <%= bill.payment.transactionId %>)</small>
+                        <% } %>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Products/Services Table -->
+        <div class="section">
+            <h3 class="section-title">Items</h3>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Description</th>
+                            <th>Code</th>
+                            <th class="text-center">Qty</th>
+                            <th class="text-right">Price</th>
+                            <th class="text-right">Discount</th>
+                            <th class="text-right">Tax %</th>
+                            <th class="text-right">Tax Amt</th>
+                            <th class="text-right">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <% bill.products.forEach((product, index) => { %>
+                            <tr>
+                                <td><%= index + 1 %></td>
+                                <td>
+                                    <div class="text-bold"><%= product.name %></div>
+                                    <% if (product.description) { %>
+                                        <div class="text-muted" style="font-size: 11px; color: #6B7280;">
+                                            <%= product.description %>
+                                        </div>
+                                    <% } %>
+                                </td>
+                                <td><%= product.code || '-' %></td>
+                                <td class="text-center"><%= product.quantity %></td>
+                                <td class="text-right"><%= formatCurrency(product.mrp) %></td>
+                                <td class="text-right"><%= formatCurrency(product.discount || 0) %></td>
+                                <td class="text-right"><%= product.taxRate || 0 %>%</td>
+                                <td class="text-right"><%= formatCurrency(product.taxAmount || 0) %></td>
+                                <td class="text-right text-bold"><%= formatCurrency(product.total) %></td>
+                            </tr>
+                        <% }) %>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Totals Section -->
+        <div class="totals-section">
+            <div class="totals-table">
+                <div class="totals-row">
+                    <div class="total-label">Subtotal:</div>
+                    <div class="total-value"><%= formatCurrency(bill.subtotal) %></div>
+                </div>
+                
+                <% if (bill.totalDiscount > 0) { %>
+                    <div class="totals-row">
+                        <div class="total-label">Discount:</div>
+                        <div class="total-value">-<%= formatCurrency(bill.totalDiscount) %></div>
+                    </div>
+                <% } %>
+                
+                <% if (bill.totalTax > 0) { %>
+                    <div class="totals-row">
+                        <div class="total-label">Tax:</div>
+                        <div class="total-value"><%= formatCurrency(bill.totalTax) %></div>
+                    </div>
+                <% } %>
+                
+                <div class="totals-row grand-total">
+                    <div class="total-label">Grand Total:</div>
+                    <div class="total-value"><%= formatCurrency(bill.finalAmount) %></div>
+                </div>
+                
+                <% if (bill.payment.amount > 0) { %>
+                    <div class="totals-row">
+                        <div class="total-label">Amount Paid:</div>
+                        <div class="total-value"><%= formatCurrency(bill.payment.amount) %></div>
+                    </div>
+                    
+                    <% if (bill.finalAmount - bill.payment.amount > 0) { %>
+                        <div class="totals-row">
+                            <div class="total-label">Balance Due:</div>
+                            <div class="total-value text-bold" style="color: #DC2626;">
+                                <%= formatCurrency(bill.finalAmount - bill.payment.amount) %>
+                            </div>
+                        </div>
+                    <% } else if (bill.payment.amount - bill.finalAmount > 0) { %>
+                        <div class="totals-row">
+                            <div class="total-label">Change Due:</div>
+                            <div class="total-value text-bold" style="color: #059669;">
+                                <%= formatCurrency(bill.payment.amount - bill.finalAmount) %>
+                            </div>
+                        </div>
+                    <% } %>
+                <% } %>
+            </div>
+        </div>
+
+        <!-- Notes & Terms -->
+        <% if (bill.notes || bill.terms) { %>
+            <div class="section two-columns" style="margin-top: 30px;">
+                <% if (bill.notes) { %>
+                    <div class="column">
+                        <h3 class="section-title">Notes</h3>
+                        <div style="font-size: 12px; line-height: 1.5; color: #6B7280;">
+                            <%= bill.notes %>
+                        </div>
+                    </div>
+                <% } %>
+                
+                <% if (bill.terms) { %>
+                    <div class="column">
+                        <h3 class="section-title">Terms & Conditions</h3>
+                        <div style="font-size: 12px; line-height: 1.5; color: #6B7280;">
+                            <%= bill.terms %>
+                        </div>
+                    </div>
+                <% } %>
+            </div>
+        <% } %>
+
+        <!-- QR Code for Digital Verification -->
+        <div class="qr-section">
+            <div>Scan to verify invoice</div>
+            <div class="qr-label">
+                Invoice: <%= bill.invoiceNumber %> | Date: <%= formatDate(bill.invoiceDate) %>
+            </div>
+            <div style="margin-top: 10px; color: #6B7280; font-size: 10px;">
+                This is a computer-generated invoice and does not require a physical signature.
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <div class="payment-info">
+                <h4>Payment Information</h4>
+                <p>Bank: <%= company.bankName || 'ABC Bank' %> | A/C No: <%= company.accountNumber || 'XXXXXX' %></p>
+                <p>IFSC: <%= company.ifscCode || 'XXXXX' %> | UPI: <%= company.upiId || 'company@upi' %></p>
+            </div>
+            <p style="margin-top: 15px;">
+                Thank you for your business! For any queries, please contact <%= company.email %>
+            </p>
+            <p style="margin-top: 5px; font-size: 10px;">
+                Generated on: <%= new Date().toLocaleString() %> by <%= generatedBy %>
+            </p>
+        </div>
+    </div>
+</body>
+</html>
