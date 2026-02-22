@@ -1,4 +1,5 @@
 const { body } = require('express-validator');
+const Joi = require('joi');
 
 const createCustomerValidation = [
   body('name')
@@ -97,37 +98,75 @@ const createCustomerValidation = [
     .withMessage('Invalid tag value')
 ];
 
-const updateCustomerValidation = [
-  body('name')
-    .optional()
+const updateCustomerValidation = Joi.object({
+  name: Joi.string()
+    .max(100)
     .trim()
-    .isLength({ max: 100 })
-    .withMessage('Name cannot exceed 100 characters'),
+    .optional(),
   
-  body('phone')
-    .optional()
+  phone: Joi.string()
+    .pattern(/^[\+]?[1-9][\d]{0,15}$/)
     .trim()
-    .matches(/^[\+]?[1-9][\d]{0,15}$/)
-    .withMessage('Please enter a valid phone number'),
-  
-  body('email')
     .optional()
+    .messages({
+      'string.pattern.base': 'Please enter a valid phone number'
+    }),
+  
+  email: Joi.string()
+    .email()
     .trim()
-    .isEmail()
-    .withMessage('Please enter a valid email')
-    .normalizeEmail(),
+    .lowercase()
+    .optional(),
   
-  body('isActive')
-    .optional()
-    .isBoolean()
-    .withMessage('isActive must be a boolean'),
+  isActive: Joi.boolean()
+    .optional(),
   
-  body('age')
-    .optional()
-    .isInt({ min: 0, max: 150 })
-    .withMessage('Age must be between 0 and 150')
-];
-
+  age: Joi.number()
+    .integer()
+    .min(0)
+    .max(150)
+    .optional(),
+  
+  sex: Joi.string()
+    .valid('Male', 'Female', 'Other', '')
+    .optional(),
+  
+  dateOfBirth: Joi.date()
+    .optional(),
+  
+  address: Joi.object({
+    street: Joi.string().optional(),
+    city: Joi.string().optional(),
+    state: Joi.string().optional(),
+    zipCode: Joi.string().optional(),
+    country: Joi.string().default('USA')
+  }).optional(),
+  
+  medicalHistory: Joi.object({
+    diabetes: Joi.boolean().default(false),
+    hypertension: Joi.boolean().default(false),
+    glaucoma: Joi.boolean().default(false),
+    cataract: Joi.boolean().default(false),
+    allergies: Joi.array().items(Joi.string()),
+    medications: Joi.array().items(Joi.string()),
+    notes: Joi.string()
+  }).optional(),
+  
+  insurance: Joi.object({
+    provider: Joi.string().optional(),
+    policyNumber: Joi.string().optional(),
+    groupNumber: Joi.string().optional(),
+    validUntil: Joi.date().optional()
+  }).optional(),
+  
+  tags: Joi.array()
+    .items(Joi.string().valid('vip', 'frequent', 'new', 'referred', 'senior', 'child', 'contact_lens'))
+    .optional(),
+  
+  notes: Joi.string().optional()
+}).min(1).messages({
+  'object.min': 'At least one field must be provided for update'
+});
 module.exports = {
   createCustomerValidation,
   updateCustomerValidation

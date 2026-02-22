@@ -14,6 +14,7 @@ const {
   getShopCustomers
 } = require('../controllers/customerController');
 
+
 // All routes are protected
 router.use(protect);
 
