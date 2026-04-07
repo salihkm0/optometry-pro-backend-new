@@ -69,7 +69,8 @@ const getRecords = asyncHandler(async (req, res) => {
     endDate, 
     status, 
     examinationType,
-    optometrist 
+    optometrist,
+    search  // Add search parameter
   } = req.query;
 
   let query = {};
@@ -105,14 +106,40 @@ const getRecords = asyncHandler(async (req, res) => {
     if (endDate) query.date.$lte = new Date(endDate);
   }
 
+  // Handle search functionality
+  if (search && search.trim() !== '') {
+    // First find customers matching the search term
+    const customers = await Customer.find({
+      shop: query.shop,
+      $or: [
+        { name: { $regex: search, $options: 'i' } },
+        { phone: { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } },
+        { customerId: { $regex: search, $options: 'i' } }
+      ]
+    }).select('_id');
+
+    const customerIds = customers.map(c => c._id);
+
+    // Add search conditions to query
+    query.$or = [
+      { recordId: { $regex: search, $options: 'i' } },
+      { customer: { $in: customerIds } },
+      { 'billing.invoiceNumber': { $regex: search, $options: 'i' } }
+    ];
+  }
+
   const total = await OptometryRecord.countDocuments(query);
-  const records = await OptometryRecord.find(query)
-    .populate('customer', 'name age sex phone')
+  
+  let recordsQuery = OptometryRecord.find(query)
+    .populate('customer', 'name age sex phone customerId email')
     .populate('optometrist', 'name role')
     .populate('shop', 'name')
     .sort({ date: -1 })
     .skip(skip)
     .limit(limit);
+
+  const records = await recordsQuery;
 
   const pagination = {
     total,
@@ -129,7 +156,7 @@ const getRecords = asyncHandler(async (req, res) => {
 // @access  Private (Shop access)
 const getRecordById = asyncHandler(async (req, res) => {
   const record = await OptometryRecord.findById(req.params.id)
-    .populate('customer', 'name age sex phone email address medicalHistory')
+    .populate('customer', 'name age sex phone email address medicalHistory customerId')
     .populate('optometrist', 'name email phone role')
     .populate('assistant', 'name email phone role')
     .populate('shop', 'name contact.address')
@@ -210,15 +237,11 @@ const deleteRecord = asyncHandler(async (req, res) => {
     }
   }
 
-  // Only allow deletion of draft records
-  // if (record.status !== 'draft') {
-  //   return errorResponse(res, 'Can only delete draft records', 400);
-  // }
-
   // Use deleteOne() instead of remove()
   await record.deleteOne();
   successResponse(res, null, 'Record deleted successfully');
 });
+
 // @desc    Get customer records
 // @route   GET /api/customers/:customerId/records
 // @access  Private (Shop access)
@@ -339,7 +362,7 @@ const getShopRecordsStats = asyncHandler(async (req, res) => {
 // @route   GET /api/records/export
 // @access  Private
 const exportRecords = asyncHandler(async (req, res) => {
-  const { shop, startDate, endDate, format = 'json' } = req.query;
+  const { shop, startDate, endDate, format = 'json', search } = req.query;
 
   let query = {};
 
@@ -357,6 +380,24 @@ const exportRecords = asyncHandler(async (req, res) => {
     if (endDate) query.date.$lte = new Date(endDate);
   }
 
+  // Handle search for export
+  if (search && search.trim() !== '') {
+    const customers = await Customer.find({
+      shop: query.shop,
+      $or: [
+        { name: { $regex: search, $options: 'i' } },
+        { phone: { $regex: search, $options: 'i' } }
+      ]
+    }).select('_id');
+
+    const customerIds = customers.map(c => c._id);
+
+    query.$or = [
+      { recordId: { $regex: search, $options: 'i' } },
+      { customer: { $in: customerIds } }
+    ];
+  }
+
   const records = await OptometryRecord.find(query)
     .populate('customer', 'name age sex phone email')
     .populate('optometrist', 'name')
@@ -365,17 +406,19 @@ const exportRecords = asyncHandler(async (req, res) => {
 
   if (format === 'csv') {
     // Convert to CSV
-    const headers = ['Date', 'Record ID', 'Customer', 'Age', 'Sex', 'Phone', 'Examination Type', 'Status', 'Amount'];
+    const headers = ['Date', 'Record ID', 'Customer', 'Age', 'Sex', 'Phone', 'Email', 'Examination Type', 'Status', 'Amount', 'Optometrist'];
     const csvData = records.map(record => [
       record.date.toISOString().split('T')[0],
       record.recordId,
-      record.customer.name,
-      record.customer.age,
-      record.customer.sex,
-      record.customer.phone,
+      record.customer?.name || 'N/A',
+      record.customer?.age || 'N/A',
+      record.customer?.sex || 'N/A',
+      record.customer?.phone || 'N/A',
+      record.customer?.email || 'N/A',
       record.examinationType,
       record.status,
-      record.billing?.amount || 0
+      record.billing?.amount || 0,
+      record.optometrist?.name || 'N/A'
     ]);
 
     const csvContent = [

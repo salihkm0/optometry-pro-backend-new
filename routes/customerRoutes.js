@@ -11,9 +11,10 @@ const {
   deleteCustomer,
   searchCustomers,
   getCustomerStats,
-  getShopCustomers
+  getShopCustomers,
+  getFamilyMembers,           // New
+  updateCustomerWithFamily    // New
 } = require('../controllers/customerController');
-
 
 // All routes are protected
 router.use(protect);
@@ -33,6 +34,19 @@ router.get(
 router.get(
   '/search',
   searchCustomers
+);
+
+// Family management routes
+router.get(
+  '/:id/family',
+  validateObjectId('id'),
+  getFamilyMembers
+);
+
+router.put(
+  '/:id/family',
+  validateObjectId('id'),
+  updateCustomerWithFamily
 );
 
 // Shop-specific customer routes

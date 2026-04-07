@@ -19,19 +19,29 @@ const createCustomer = asyncHandler(async (req, res) => {
     }
   }
 
-  // Check for duplicate phone in the same shop
+  // Check for duplicate phone with same name (optional warning)
   if (phone) {
-    const existingCustomer = await Customer.findOne({
+    const existingCustomersWithPhone = await Customer.find({
       shop: targetShop,
       phone
     });
-
-    if (existingCustomer) {
-      return errorResponse(res, 'Customer with this phone already exists in this shop', 400);
+    
+    if (existingCustomersWithPhone.length > 0) {
+      // Check if customer with same name already exists
+      const duplicateByName = existingCustomersWithPhone.some(
+        c => c.name.toLowerCase() === customerData.name?.toLowerCase()
+      );
+      
+      if (duplicateByName) {
+        return errorResponse(res, 'Customer with this name and phone already exists in this shop', 400);
+      }
+      
+      // Optional: Add warning about family member (you can still create)
+      console.log(`Warning: Adding customer with phone ${phone} that is shared with ${existingCustomersWithPhone.length} existing customer(s)`);
     }
   }
 
-  // Check for duplicate email in the same shop
+  // Check for duplicate email (emails should be unique per person)
   if (email) {
     const existingCustomer = await Customer.findOne({
       shop: targetShop,
@@ -53,6 +63,99 @@ const createCustomer = asyncHandler(async (req, res) => {
   });
 
   successResponse(res, { customer }, 'Customer created successfully', 201);
+});
+
+// @desc    Get family members of a customer
+// @route   GET /api/customers/:id/family
+// @access  Private (Shop access)
+const getFamilyMembers = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const targetShop = req.user.shop;
+
+  // Find the customer first
+  const customer = await Customer.findOne({
+    _id: id,
+    shop: targetShop
+  }).populate('createdBy', 'name email');
+
+  if (!customer) {
+    return errorResponse(res, 'Customer not found', 404);
+  }
+
+  // Find all family members sharing the same phone number
+  const familyMembers = await Customer.find({
+    shop: targetShop,
+    phone: customer.phone,
+    isActive: true
+  })
+  .select('customerId name phone email sex age dateOfBirth relationship familyHead createdAt')
+  .populate('createdBy', 'name');
+
+  // Separate the primary customer from family members
+  const primaryCustomer = familyMembers.find(m => m._id.toString() === customer._id.toString());
+  const otherFamilyMembers = familyMembers.filter(m => m._id.toString() !== customer._id.toString());
+
+  successResponse(res, {
+    primaryCustomer: primaryCustomer,
+    familyMembers: otherFamilyMembers,
+    totalFamilyMembers: familyMembers.length,
+    sharedPhone: customer.phone
+  }, 'Family members retrieved successfully');
+});
+
+// @desc    Update customer with family relationship
+// @route   PUT /api/customers/:id/family
+// @access  Private (Shop access)
+const updateCustomerWithFamily = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { relationship, familyHeadId, familyRole } = req.body;
+  const targetShop = req.user.shop;
+
+  const customer = await Customer.findOne({
+    _id: id,
+    shop: targetShop
+  });
+
+  if (!customer) {
+    return errorResponse(res, 'Customer not found', 404);
+  }
+
+  // Add family relationship fields
+  const updateFields = {};
+  
+  if (relationship) {
+    updateFields.relationship = relationship;
+  }
+  
+  if (familyHeadId) {
+    // Verify family head exists and shares same phone
+    const familyHead = await Customer.findOne({
+      _id: familyHeadId,
+      shop: targetShop,
+      phone: customer.phone
+    });
+    
+    if (!familyHead) {
+      return errorResponse(res, 'Family head not found or does not share the same phone number', 400);
+    }
+    updateFields.familyHead = familyHeadId;
+  }
+  
+  if (familyRole) {
+    updateFields.familyRole = familyRole;
+  }
+
+  // Update customer
+  const updatedCustomer = await Customer.findByIdAndUpdate(
+    id,
+    updateFields,
+    { new: true, runValidators: true }
+  ).select('customerId name phone email relationship familyHead familyRole');
+
+  successResponse(res, { 
+    customer: updatedCustomer,
+    message: relationship ? 'Family relationship updated successfully' : 'Customer family information updated successfully'
+  });
 });
 
 // @desc    Get all customers
@@ -139,7 +242,18 @@ const getCustomerById = asyncHandler(async (req, res) => {
     .sort({ date: -1 })
     .limit(10);
 
-  successResponse(res, { customer, recentRecords: records }, 'Customer retrieved successfully');
+  // Get family members count
+  const familyMembersCount = await Customer.countDocuments({
+    shop: customer.shop,
+    phone: customer.phone,
+    isActive: true
+  });
+
+  successResponse(res, { 
+    customer, 
+    recentRecords: records,
+    familyMembersCount: familyMembersCount > 1 ? familyMembersCount - 1 : 0
+  }, 'Customer retrieved successfully');
 });
 
 // @desc    Update customer
@@ -160,7 +274,7 @@ const updateCustomer = asyncHandler(async (req, res) => {
     }
   }
 
-  // Check for duplicate phone
+  // Check for duplicate phone - but allow if it's for family sharing
   if (phone && phone !== customer.phone) {
     const phoneExists = await Customer.findOne({
       shop: customer.shop,
@@ -168,11 +282,13 @@ const updateCustomer = asyncHandler(async (req, res) => {
       _id: { $ne: customer._id }
     });
     if (phoneExists) {
-      return errorResponse(res, 'Phone number already exists in this shop', 400);
+      // Instead of blocking, just warn about family sharing
+      console.log(`Warning: Updating customer phone to ${phone} which is shared with ${phoneExists.name}`);
+      // You can still proceed with the update
     }
   }
 
-  // Check for duplicate email
+  // Check for duplicate email (still unique per customer)
   if (email && email !== customer.email) {
     const emailExists = await Customer.findOne({
       shop: customer.shop,
@@ -223,9 +339,6 @@ const deleteCustomer = asyncHandler(async (req, res) => {
 
     // Delete customer
     await Customer.findByIdAndDelete(req.params.id);
-    
-    // Optional: Delete related records if needed
-    // await OptometryRecord.deleteMany({ customer: req.params.id });
     
     return successResponse(res, null, 'Customer deleted successfully', 200);
   } catch (error) {
@@ -298,11 +411,21 @@ const getCustomerStats = asyncHandler(async (req, res) => {
   .sort({ date: -1 })
   .limit(20);
 
+  // Get family members
+  const familyMembers = await Customer.find({
+    shop: customer.shop,
+    phone: customer.phone,
+    isActive: true,
+    _id: { $ne: customer._id }
+  }).select('name relationship');
+
   successResponse(res, {
     totalRecords,
     firstVisit: firstRecord?.date,
     lastVisit: lastRecord?.date,
-    prescriptions
+    prescriptions,
+    familyMembers: familyMembers,
+    totalFamilyMembers: familyMembers.length
   }, 'Customer statistics retrieved');
 });
 
@@ -334,5 +457,7 @@ module.exports = {
   deleteCustomer,
   searchCustomers,
   getCustomerStats,
-  getShopCustomers
+  getShopCustomers,
+  getFamilyMembers,           // Export new function
+  updateCustomerWithFamily    // Export new function
 };

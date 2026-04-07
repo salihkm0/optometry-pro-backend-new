@@ -34,6 +34,7 @@ const customerSchema = new mongoose.Schema({
     type: String,
     trim: true,
     required: [true, 'Phone number is required']
+    // Removed unique constraint - family members can share phone numbers
   },
   email: {
     type: String,
@@ -92,8 +93,9 @@ const customerSchema = new mongoose.Schema({
 });
 
 // Indexes
-customerSchema.index({ shop: 1, phone: 1 }, { unique: true });
-customerSchema.index({ shop: 1, email: 1 }, { sparse: true });
+// Removed unique constraint from phone - now allows multiple customers with same phone
+customerSchema.index({ shop: 1, phone: 1 }); // Regular index for performance only
+customerSchema.index({ shop: 1, email: 1 }, { unique: true, sparse: true }); // Email remains unique
 customerSchema.index({ shop: 1, name: 1 });
 customerSchema.index({ shop: 1, isActive: 1 });
 customerSchema.index({ shop: 1, lastVisit: -1 });
@@ -141,6 +143,15 @@ customerSchema.statics.searchCustomers = async function(shopId, searchTerm) {
       { customerId: { $regex: searchTerm, $options: 'i' } }
     ]
   }).limit(20);
+};
+
+// Optional: Method to find family members sharing same phone
+customerSchema.statics.findFamilyMembers = async function(shopId, phone) {
+  return this.find({
+    shop: shopId,
+    phone: phone,
+    isActive: true
+  }).select('name customerId phone dateOfBirth sex relationship');
 };
 
 module.exports = mongoose.model('Customer', customerSchema);
